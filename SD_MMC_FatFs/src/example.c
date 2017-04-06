@@ -232,6 +232,11 @@ void SysTick_Handler(void)
 	g_ul_ms_ticks++;
 }
 
+void TWIHS0_Handler(void)
+{
+	twihs_get_interrupt_status(TWIHS0);
+}
+
 /**
  *  \brief Configure the Console UART.
  *//*
@@ -282,7 +287,7 @@ int main(void)
 	twihs_options_t opt;
 	twihs_packet_t packet_tx1, packet_rx1;
 	int16_t Temp, Pitch, Roll, Heading;
-	
+	static _Bool constanta;
 	/* Initialize the SAM system */
 	sysclk_init();
 
@@ -320,7 +325,7 @@ int main(void)
 			/* Capture error */
 		}
 	}
-	
+//	twihs_enable_interrupt(Twihs *p_twihs, uint32_t ul_sources);
 	registr_w = opr;
 	register_value = ndof;
 	
@@ -363,7 +368,8 @@ int main(void)
 			itoa(Roll, buffer_roll, 10);
 			itoa(Heading, buffer_heading, 10);
 			
-main_end_of_test:			
+main_end_of_test:
+		
 			do {
 				status = sd_mmc_test_unit_ready(0);
 				if (CTRL_FAIL == status) {
@@ -378,21 +384,47 @@ main_end_of_test:
 			res = f_mount(LUN_ID_SD_MMC_0_MEM, &fs);
 			if (FR_INVALID_DRIVE == res) {
 				printf("[FAIL] res %d\r\n", res);
-						goto main_end_of_test;
+				constanta = false;
+				goto main_end_of_test;
+			}
+						
+			if(!constanta)
+			{
+				res = f_open(&file_object, (char const *)test_file_name,
+				FA_OPEN_ALWAYS | FA_WRITE);
+				if (res != FR_OK) {
+					printf("[FAIL] res %d\r\n", res);
+					constanta = false;
+					goto main_end_of_test;
+				}
+				if (0 == f_printf(&file_object,"Температура |  Рысканье |   Крен | Тангаж | \r\n"))
+				{
+					f_close(&file_object);
+					printf("[FAIL]\r\n");
+					constanta = false;
+					goto main_end_of_test;
+				}
+				constanta = true;	
+				f_close(&file_object);	
 			}
 			
 			res = f_open(&file_object, (char const *)test_file_name,
 			FA_OPEN_ALWAYS | FA_WRITE);
 			if (res != FR_OK) {
 				printf("[FAIL] res %d\r\n", res);
-						goto main_end_of_test;
-			}			
+				constanta = false;
+				goto main_end_of_test;
+			}
+			
+			f_lseek (&file_object, file_object.fsize);
 				
-			if (0 == f_printf(&file_object,"Температура: %s\r\nРысканье: %s\r\nКрен: %s\r\nТангаж: %s\r\n", buffer_tmp, buffer_heading, buffer_roll, buffer_pitch))
+			if (0 == f_printf(&file_object,"%s           |  %s        |  %s     | %s    | \r\n", \
+			buffer_tmp, buffer_heading, buffer_roll, buffer_pitch))
 //			if (0 == f_puts(buffer_tmp, &file_object))			 
 			{
 				f_close(&file_object);
 				printf("[FAIL]\r\n");
+				constanta = 0;
 				goto main_end_of_test;
 			}
 			f_close(&file_object);	
